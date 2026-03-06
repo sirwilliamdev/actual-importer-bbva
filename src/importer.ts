@@ -3,7 +3,6 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 import * as api from "@actual-app/api";
 import { mkdirSync } from "fs";
-import { initCategories, resolveCategoryId } from "./categories.js";
 import type { BbvaTransaction } from "./parser.js";
 
 export interface Config {
@@ -49,9 +48,6 @@ export async function importTransactions(
   const accountId = account.id;
   console.log(`Importing into account: "${account.name}" (${accountId})`);
 
-  const categories = await api.getCategories();
-  initCategories(categories);
-
   const mapped = transactions.map((t) => ({
     account: accountId,
     date: t.date,
@@ -60,7 +56,6 @@ export async function importTransactions(
     imported_payee: t.payee,
     notes: t.notes,
     imported_id: t.importedId,
-    category: resolveCategoryId(t.payee),
     cleared: true,
   }));
 

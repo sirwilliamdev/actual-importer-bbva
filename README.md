@@ -49,14 +49,6 @@ npx tsx src/index.ts --file ~/Downloads/moviments.xlsx
 npx tsx src/index.ts --file ~/Downloads/moviments.xlsx --account-id "Other Account"
 ```
 
-## Category mapping
-
-Transactions are auto-categorized using the CSV at:
-```
-/home/guillemc/personal/money/src/utils/data/db_expense_category.csv
-```
-Format: `CONCEPTE,CATEGORIA` — lowercase payee name → Actual Budget category name. Transactions with no match are imported without a category.
-
 ## BBVA Excel format
 
 The tool auto-detects column positions from the header row, so it works with both the standard export format and the extended format (which adds `Disponible` columns):
