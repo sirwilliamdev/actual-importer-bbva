@@ -39,17 +39,32 @@ export async function parseBbvaFile(
     throw new Error("Could not find header row with 'D. valor' in the file");
   }
 
+  // Read column indices from the header row
+  const headerRow = worksheet.getRow(headerRowNumber);
+  const headerValues = headerRow.values as unknown[];
+  let colDValor = -1, colData = -1, colConcepte = -1, colImport = -1, colObservacions = -1;
+  for (let i = 1; i < headerValues.length; i++) {
+    const h = String(headerValues[i] ?? "").trim();
+    if (h === "D. valor" && colDValor === -1) colDValor = i;
+    else if (h === "Data" && colData === -1) colData = i;
+    else if (h === "Concepte" && colConcepte === -1) colConcepte = i;
+    else if (h === "Import" && colImport === -1) colImport = i;
+    else if (h === "Observacions" && colObservacions === -1) colObservacions = i;
+  }
+  if (colDValor === -1 || colData === -1 || colConcepte === -1 || colImport === -1) {
+    throw new Error("Could not find required columns in header row");
+  }
+
   const transactions: BbvaTransaction[] = [];
 
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber <= headerRowNumber) return;
 
-    const values = row.values as unknown[]; // 1-indexed (index 0 is undefined in exceljs)
-    // Column positions (1-indexed): B=2, C=3, D=4, E=5, F=6, G=7, H=8
-    const dValor = values[2];
-    const data = values[3];
-    const concepte = values[4];
-    const importValue = values[6];
+    const values = row.values as unknown[];
+    const dValor = values[colDValor];
+    const data = values[colData];
+    const concepte = values[colConcepte];
+    const importValue = values[colImport];
 
     // Skip empty rows
     if (!dValor && !concepte && !importValue) return;
@@ -58,7 +73,7 @@ export async function parseBbvaFile(
     const payee = String(concepte ?? "").trim();
     const dValorStr = String(dValor ?? "").trim();
     const dataStr = String(data ?? "").trim();
-    const observacions = String(values[8] ?? "").trim();
+    const observacions = colObservacions !== -1 ? String(values[colObservacions] ?? "").trim() : "";
 
     transactions.push({
       date: parseDate(dataStr),

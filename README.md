@@ -37,7 +37,11 @@ cp config.example.json config.json
 
 ## Usage
 
-Download your movements from BBVA ("Descargar" → Excel) then run:
+### 1. Download the Excel from BBVA
+
+Log in to BBVA online banking, go to **Posició global** (or your account's movements), and click **Descarregar** / **Descargar** → **Excel**. Make sure to select **"Tots els moviments"** / **"Todos los movimientos"** to export all transactions (not just recent ones).
+
+### 2. Run the importer
 
 ```bash
 npx tsx src/index.ts --file ~/Downloads/moviments.xlsx
@@ -55,7 +59,8 @@ Format: `CONCEPTE,CATEGORIA` — lowercase payee name → Actual Budget category
 
 ## BBVA Excel format
 
-The tool expects the standard BBVA export with columns:
-`D. valor` · `Data` · `Concepte` · `Moviment` · `Import` · `Divisa` · `Observacions`
+The tool auto-detects column positions from the header row, so it works with both the standard export format and the extended format (which adds `Disponible` columns):
 
-The header row is detected automatically (rows above it are skipped).
+`D. valor` · `Data` · `Concepte` · `Moviment` · `Import` · `Divisa` · [`Disponible` · `Divisa` ·] `Observacions`
+
+The `Observacions` column (raw bank description including card number) is stored as the transaction note in Actual Budget.
