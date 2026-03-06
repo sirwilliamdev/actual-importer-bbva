@@ -1,8 +1,8 @@
-import "./polyfill.js";
+import "../node_modules/actual-importer/src/polyfill.js";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { parseBbvaFile } from "./parser.js";
-import { importTransactions, type Config } from "./importer.js";
+import { importTransactions, type Config } from "actual-importer";
 
 function parseArgs(args: string[]): Record<string, string> {
   const result: Record<string, string> = {};

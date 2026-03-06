@@ -1,12 +1,5 @@
 import ExcelJS from "exceljs";
-
-export interface BbvaTransaction {
-  date: string; // YYYY-MM-DD (from D. valor column)
-  payee: string; // Concepte
-  amount: number; // integer cents: Math.round(Import * 100), negative = outflow
-  importedId: string; // dedup key: "D.valor|Data|Concepte|Import"
-  notes: string; // Observacions (raw bank description)
-}
+import type { Transaction } from "actual-importer";
 
 function parseDate(raw: unknown): string {
   const s = String(raw).trim();
@@ -17,7 +10,7 @@ function parseDate(raw: unknown): string {
 
 export async function parseBbvaFile(
   filePath: string
-): Promise<BbvaTransaction[]> {
+): Promise<Transaction[]> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
 
@@ -55,7 +48,7 @@ export async function parseBbvaFile(
     throw new Error("Could not find required columns in header row");
   }
 
-  const transactions: BbvaTransaction[] = [];
+  const transactions: Transaction[] = [];
 
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber <= headerRowNumber) return;
