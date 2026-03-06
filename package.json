@@ -1,0 +1,19 @@
+{
+  "name": "bbva-actual-importer",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "postinstall": "bash scripts/setup-sqlite.sh"
+  },
+  "dependencies": {
+    "@actual-app/api": "latest",
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

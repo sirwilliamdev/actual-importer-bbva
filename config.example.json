@@ -1,0 +1,6 @@
+{
+  "serverURL": "http://localhost:5006",
+  "password": "your-password",
+  "budgetId": "your-sync-id",
+  "defaultAccountId": "actual-account-uuid"
+}
