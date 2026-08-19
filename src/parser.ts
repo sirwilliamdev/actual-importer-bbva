@@ -1,5 +1,9 @@
 import ExcelJS from "exceljs";
 import type { Transaction } from "actual-importer";
+import { withOccurrence } from "actual-importer/keys";
+import { buildKey } from "./keys.js";
+
+export { KEY_VERSION, buildKey, migrateKey, type BbvaKeyParts } from "./keys.js";
 
 // BBVA spells the value-date column differently per report: "Últims moviments"
 // exports use 'D. valor', "Moviments" exports use 'Data valor'.
@@ -112,9 +116,9 @@ export async function parseBbvaStatement(filePath: string): Promise<BbvaStatemen
 
   const transactions: Transaction[] = [];
   // BBVA exports carry no per-transaction reference, so two genuinely distinct
-  // movements can share date/concept/amount. Counting occurrences keeps their
-  // dedup keys distinct; the first one keeps the original key so transactions
-  // imported before this fix still match and are not duplicated.
+  // movements can share date, concept and amount — two 500 € transfers on the
+  // same day are a real thing here. Counting occurrences within the file is
+  // what keeps their keys distinct.
   const occurrences = new Map<string, number>();
 
   let latestDate = "";
@@ -134,12 +138,10 @@ export async function parseBbvaStatement(filePath: string): Promise<BbvaStatemen
 
     const amount = Math.round(Number(importValue) * 100);
     const payee = String(concepte ?? "").trim();
-    const dValorStr = String(dValor ?? "").trim();
-    const dataStr = String(data ?? "").trim();
     const observacions = colObservacions !== -1 ? String(values[colObservacions] ?? "").trim() : "";
     const date = parseDate(data);
 
-    const baseId = `${dValorStr}|${dataStr}|${payee}|${importValue}`;
+    const baseId = buildKey({ valueDate: parseDate(dValor), date, payee, amountCents: amount });
     const occurrence = (occurrences.get(baseId) ?? 0) + 1;
     occurrences.set(baseId, occurrence);
 
@@ -147,7 +149,7 @@ export async function parseBbvaStatement(filePath: string): Promise<BbvaStatemen
       date,
       payee,
       amount,
-      importedId: occurrence === 1 ? baseId : `${baseId}|#${occurrence}`,
+      importedId: withOccurrence(baseId, occurrence),
       notes: observacions,
     });
 
