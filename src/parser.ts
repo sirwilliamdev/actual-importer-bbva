@@ -1,54 +1,124 @@
 import ExcelJS from "exceljs";
 import type { Transaction } from "actual-importer";
 
+// BBVA spells the value-date column differently per report: "Últims moviments"
+// exports use 'D. valor', "Moviments" exports use 'Data valor'.
+const VALUE_DATE_HEADERS = ["D. valor", "Data valor"];
+
+export interface BbvaStatement {
+  transactions: Transaction[];
+  // Running balance after the most recent movement, when the export includes
+  // the 'Disponible' column ("Moviments" reports have it, "Últims moviments"
+  // reports do not). Integer cents.
+  availableBalance?: number;
+}
+
 function parseDate(raw: unknown): string {
+  // ExcelJS returns either a plain DD/MM/YYYY string or a real Date, depending
+  // on how the cell is formatted in the export.
+  if (raw instanceof Date) {
+    const y = raw.getUTCFullYear();
+    const m = String(raw.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(raw.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
   const s = String(raw).trim();
-  // Expected format: DD/MM/YYYY
-  const [day, month, year] = s.split("/");
+  const match = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) {
+    throw new Error(`Unrecognised date value: ${JSON.stringify(raw)}`);
+  }
+  const [, day, month, year] = match;
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
-export async function parseBbvaFile(
-  filePath: string
-): Promise<Transaction[]> {
+interface SheetLayout {
+  worksheet: ExcelJS.Worksheet;
+  headerRowNumber: number;
+  colDValor: number;
+  colData: number;
+  colConcepte: number;
+  colImport: number;
+  colObservacions: number;
+  colDisponible: number;
+}
+
+async function readLayout(filePath: string): Promise<SheetLayout> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
 
   const worksheet = workbook.worksheets[0];
   if (!worksheet) throw new Error("No worksheet found in file");
 
-  // Find header row by scanning for a cell containing 'D. valor'
   let headerRowNumber = -1;
   worksheet.eachRow((row, rowNumber) => {
     if (headerRowNumber !== -1) return;
     row.eachCell((cell) => {
-      if (String(cell.value).trim() === "D. valor") {
+      if (VALUE_DATE_HEADERS.includes(String(cell.value).trim())) {
         headerRowNumber = rowNumber;
       }
     });
   });
 
   if (headerRowNumber === -1) {
-    throw new Error("Could not find header row with 'D. valor' in the file");
+    throw new Error(
+      `Could not find header row with ${VALUE_DATE_HEADERS.map((h) => `'${h}'`).join(" or ")} in the file`
+    );
   }
 
-  // Read column indices from the header row
-  const headerRow = worksheet.getRow(headerRowNumber);
-  const headerValues = headerRow.values as unknown[];
-  let colDValor = -1, colData = -1, colConcepte = -1, colImport = -1, colObservacions = -1;
+  const headerValues = worksheet.getRow(headerRowNumber).values as unknown[];
+  let colDValor = -1,
+    colData = -1,
+    colConcepte = -1,
+    colImport = -1,
+    colObservacions = -1,
+    colDisponible = -1;
   for (let i = 1; i < headerValues.length; i++) {
     const h = String(headerValues[i] ?? "").trim();
-    if (h === "D. valor" && colDValor === -1) colDValor = i;
+    if (VALUE_DATE_HEADERS.includes(h) && colDValor === -1) colDValor = i;
     else if (h === "Data" && colData === -1) colData = i;
     else if (h === "Concepte" && colConcepte === -1) colConcepte = i;
     else if (h === "Import" && colImport === -1) colImport = i;
     else if (h === "Observacions" && colObservacions === -1) colObservacions = i;
+    else if (h === "Disponible" && colDisponible === -1) colDisponible = i;
   }
   if (colDValor === -1 || colData === -1 || colConcepte === -1 || colImport === -1) {
     throw new Error("Could not find required columns in header row");
   }
 
+  return {
+    worksheet,
+    headerRowNumber,
+    colDValor,
+    colData,
+    colConcepte,
+    colImport,
+    colObservacions,
+    colDisponible,
+  };
+}
+
+export async function parseBbvaStatement(filePath: string): Promise<BbvaStatement> {
+  const layout = await readLayout(filePath);
+  const {
+    worksheet,
+    headerRowNumber,
+    colDValor,
+    colData,
+    colConcepte,
+    colImport,
+    colObservacions,
+    colDisponible,
+  } = layout;
+
   const transactions: Transaction[] = [];
+  // BBVA exports carry no per-transaction reference, so two genuinely distinct
+  // movements can share date/concept/amount. Counting occurrences keeps their
+  // dedup keys distinct; the first one keeps the original key so transactions
+  // imported before this fix still match and are not duplicated.
+  const occurrences = new Map<string, number>();
+
+  let latestDate = "";
+  let availableBalance: number | undefined;
 
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber <= headerRowNumber) return;
@@ -67,15 +137,35 @@ export async function parseBbvaFile(
     const dValorStr = String(dValor ?? "").trim();
     const dataStr = String(data ?? "").trim();
     const observacions = colObservacions !== -1 ? String(values[colObservacions] ?? "").trim() : "";
+    const date = parseDate(data);
+
+    const baseId = `${dValorStr}|${dataStr}|${payee}|${importValue}`;
+    const occurrence = (occurrences.get(baseId) ?? 0) + 1;
+    occurrences.set(baseId, occurrence);
 
     transactions.push({
-      date: parseDate(dataStr),
+      date,
       payee,
       amount,
-      importedId: `${dValorStr}|${dataStr}|${payee}|${importValue}`,
+      importedId: occurrence === 1 ? baseId : `${baseId}|#${occurrence}`,
       notes: observacions,
     });
+
+    // Rows are exported newest-first, so the first row seen for the newest date
+    // carries the closing balance.
+    if (colDisponible !== -1 && date > latestDate) {
+      const disponible = values[colDisponible];
+      if (disponible !== undefined && disponible !== null && String(disponible).trim() !== "") {
+        latestDate = date;
+        availableBalance = Math.round(Number(disponible) * 100);
+      }
+    }
   });
 
+  return { transactions, availableBalance };
+}
+
+export async function parseBbvaFile(filePath: string): Promise<Transaction[]> {
+  const { transactions } = await parseBbvaStatement(filePath);
   return transactions;
 }
