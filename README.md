@@ -66,8 +66,8 @@ it has to be normalised, or the same movement exported twice produces two
 different keys and is imported twice:
 
 ```
-bbva2|<value date>|<operation date>|<Concepte>|<Import>
-bbva2|2026-04-10|2026-04-10|Bizum|500.00
+bbva3|<value date>|<operation date>|<Concepte>|<Import>
+bbva3|2026-04-10|2026-04-10|Bizum|500.00
 ```
 
 Both dates are ISO, and the amount always carries two decimals. Two genuinely
@@ -75,8 +75,19 @@ distinct movements can be identical in everything the export reports (two 500 �
 transfers on the same day is a real thing), so a key repeating within one file
 is numbered: the first keeps the bare key, the second gets `|#2`, and so on.
 
-`bbva2` is the second version of the format. Version 1 embedded the raw cell
-text, so `-12.3` and `-12.30` were different keys and a date could arrive as a
-string or as a `Date` depending on the export. Keys stored under v1 have to be
-rewritten before importing with this version — `migrateKey()` translates one,
-and the private pipeline's `migrate-ids` command does it across a whole budget.
+`Concepte` is the settled merchant, not the raw cell. BBVA writes a card
+payment into a fixed-width field — 25 characters of merchant, 13 of town, 2 of
+country code, padded to exactly 40 — while the movement is recent, then ships
+the trimmed merchant alone once it settles. `Comerc nonell            sant
+jordi dees` and `Comerc nonell` are one purchase, so `settledConcept()`
+collapses the 40-character shape to its first 25 characters. Anything of any
+other length is free text (`Càrrec …` direct debits run to 46) and survives
+whole.
+
+`bbva3` is the third version of the format. v2 normalised the dates to ISO and
+the amount to two decimals; v1 embedded the raw cell text, so `-12.3` and
+`-12.30` were different keys and a date could arrive as a string or as a `Date`
+depending on the export. Keys stored under an older version have to be
+rewritten before importing with this one — `migrateKey()` translates a v1 or v2
+key, and the private pipeline's `migrate-ids` command does it across a whole
+budget.

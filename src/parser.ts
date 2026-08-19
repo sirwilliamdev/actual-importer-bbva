@@ -1,9 +1,9 @@
 import ExcelJS from "exceljs";
 import type { Transaction } from "actual-importer";
 import { withOccurrence } from "actual-importer/keys";
-import { buildKey } from "./keys.js";
+import { buildKey, settledConcept } from "./keys.js";
 
-export { KEY_VERSION, buildKey, migrateKey, type BbvaKeyParts } from "./keys.js";
+export { KEY_VERSION, buildKey, migrateKey, settledConcept, type BbvaKeyParts } from "./keys.js";
 
 // BBVA spells the value-date column differently per report: "Últims moviments"
 // exports use 'D. valor', "Moviments" exports use 'Data valor'.
@@ -137,7 +137,7 @@ export async function parseBbvaStatement(filePath: string): Promise<BbvaStatemen
     if (!dValor && !concepte && !importValue) return;
 
     const amount = Math.round(Number(importValue) * 100);
-    const payee = String(concepte ?? "").trim();
+    const payee = settledConcept(String(concepte ?? "").trim());
     const observacions = colObservacions !== -1 ? String(values[colObservacions] ?? "").trim() : "";
     const date = parseDate(data);
 
