@@ -2,3 +2,12 @@ node_modules/
 dist/
 .actual-cache/
 config.json
+
+# Bank data — this repo is public, never commit real transactions
+data/
+*.csv
+*.xlsx
+*.xls
+*.pdf
+*.ofx
+*.qif
