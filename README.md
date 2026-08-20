@@ -66,8 +66,8 @@ it has to be normalised, or the same movement exported twice produces two
 different keys and is imported twice:
 
 ```
-bbva3|<value date>|<operation date>|<Concepte>|<Import>
-bbva3|2026-04-10|2026-04-10|Bizum|500.00
+bbva4|<value date>|<operation date>|<Concepte>|<Import>
+bbva4|2026-04-10|2026-04-10|Bizum|500.00
 ```
 
 Both dates are ISO, and the amount always carries two decimals. Two genuinely
@@ -84,10 +84,20 @@ collapses the 40-character shape to its first 25 characters. Anything of any
 other length is free text (`Càrrec …` direct debits run to 46) and survives
 whole.
 
-`bbva3` is the third version of the format. v2 normalised the dates to ISO and
-the amount to two decimals; v1 embedded the raw cell text, so `-12.3` and
-`-12.30` were different keys and a date could arrive as a string or as a `Date`
-depending on the export. Keys stored under an older version have to be
-rewritten before importing with this one — `migrateKey()` translates a v1 or v2
-key, and the private pipeline's `migrate-ids` command does it across a whole
-budget.
+BBVA's encoding of a non-ASCII character in that field is not stable, though:
+`LLIÇÀ DE MUNT` reached us once with the `ç` dropped and once with it decoded as
+U+0080, so the same padded concept arrived at 39 and at 40 characters and a
+length test alone stopped recognising it. So a concept whose length is off by up
+to two is still read as padded when it carries the padding itself — a run of two
+or more spaces starting inside the merchant field — and the cut is made at that
+run rather than at column 25, because a dropped byte shifts the town a column
+early. Measured over 5309 concept cells from every export held, no free text of
+any length satisfies that and no genuinely padded row reads differently.
+
+`bbva4` is the fourth version of the format. v3 collapsed the padded concept;
+v2 normalised the dates to ISO and the amount to two decimals; v1 embedded the
+raw cell text, so `-12.3` and `-12.30` were different keys and a date could
+arrive as a string or as a `Date` depending on the export. Keys stored under an
+older version have to be rewritten before importing with this one —
+`migrateKey()` translates a v1, v2 or v3 key, and the private pipeline's
+`migrate-ids` command does it across a whole budget.
